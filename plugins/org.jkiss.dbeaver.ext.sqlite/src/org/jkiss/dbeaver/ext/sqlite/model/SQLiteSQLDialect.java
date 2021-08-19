@@ -16,6 +16,7 @@
  */
 package org.jkiss.dbeaver.ext.sqlite.model;
 
+import org.jkiss.code.NotNull;
 import org.jkiss.dbeaver.ext.generic.model.GenericSQLDialect;
 import org.jkiss.dbeaver.model.exec.jdbc.JDBCDatabaseMetaData;
 import org.jkiss.dbeaver.model.exec.jdbc.JDBCSession;
@@ -44,5 +45,17 @@ public class SQLiteSQLDialect extends GenericSQLDialect {
     @Override
     public boolean supportsAlterTableStatement() {
         return false;
+    }
+
+    @NotNull
+    @Override
+    public MultiValueInsertMode getDefaultMultiValueInsertMode()
+    {
+        return MultiValueInsertMode.GROUP_ROWS;
+    }
+
+    @Override
+    public boolean supportsInsertAllDefaultValuesStatement() {
+        return true;
     }
 }

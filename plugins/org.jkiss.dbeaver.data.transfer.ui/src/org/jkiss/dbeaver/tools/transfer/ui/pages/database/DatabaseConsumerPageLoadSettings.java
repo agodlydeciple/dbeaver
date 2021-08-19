@@ -41,7 +41,10 @@ import org.jkiss.dbeaver.utils.HelpUtils;
 import org.jkiss.utils.CommonUtils;
 
 import java.lang.reflect.InvocationTargetException;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.StringJoiner;
 import java.util.stream.Collectors;
 
 public class DatabaseConsumerPageLoadSettings extends ActiveWizardPage<DataTransferWizard> {
@@ -54,8 +57,10 @@ public class DatabaseConsumerPageLoadSettings extends ActiveWizardPage<DataTrans
     private Button disableReferentialIntegrity;
     private Combo onDuplicateKeyInsertMethods;
     private Group loadSettings;
-    private String disableReferentialIntegrityCheckboxTooltip = "";
+    private String disableReferentialIntegrityCheckboxTooltip;
     private boolean isDisablingReferentialIntegritySupported;
+    private Spinner multiRowInsertBatch;
+    private Button useBatchCheck;
 
     public DatabaseConsumerPageLoadSettings() {
     	super(DTUIMessages.database_consumer_wizard_name);
@@ -163,11 +168,51 @@ public class DatabaseConsumerPageLoadSettings extends ActiveWizardPage<DataTrans
             });
             commitAfterEdit.setLayoutData(new GridData(GridData.HORIZONTAL_ALIGN_BEGINNING, GridData.VERTICAL_ALIGN_BEGINNING, false, false, 3, 1));
 
-            final Button useBatchCheck = UIUtils.createCheckbox(performanceSettings, DTUIMessages.database_consumer_wizard_disable_import_batches_label, DTUIMessages.database_consumer_wizard_disable_import_batches_description, settings.isDisableUsingBatches(), 4);
+            final Button useMultiRowInsert = UIUtils.createCheckbox(performanceSettings, DTUIMessages.database_consumer_wizard_checkbox_multi_insert_label, DTUIMessages.database_consumer_wizard_checkbox_multi_insert_description, settings.isUseMultiRowInsert(), 4);
+            if (useBatchCheck != null && ((!useBatchCheck.isDisposed() && useBatchCheck.getSelection())
+            || (useBatchCheck.isDisposed() && settings.isDisableUsingBatches()))) {
+                useMultiRowInsert.setEnabled(false);
+            }
+            useMultiRowInsert.addSelectionListener(new SelectionAdapter() {
+                @Override
+                public void widgetSelected(SelectionEvent e) {
+                    settings.setUseMultiRowInsert(useMultiRowInsert.getSelection());
+                    if (multiRowInsertBatch != null) {
+                        if (!useMultiRowInsert.getSelection()) {
+                            multiRowInsertBatch.setEnabled(false);
+                        } else if (!multiRowInsertBatch.getEnabled()) {
+                            multiRowInsertBatch.setEnabled(true);
+                        }
+                    }
+                }
+            });
+
+            multiRowInsertBatch = UIUtils.createLabelSpinner(performanceSettings, DTUIMessages.database_consumer_wizard_spinner_multi_insert_batch_size, settings.getMultiRowInsertBatch(), 2, Integer.MAX_VALUE);
+            if (!useMultiRowInsert.getSelection() || useBatchCheck != null && !useBatchCheck.isDisposed() && useBatchCheck.getSelection()) {
+                multiRowInsertBatch.setEnabled(false);
+            }
+            multiRowInsertBatch.addSelectionListener(new SelectionAdapter() {
+                @Override
+                public void widgetSelected(SelectionEvent e) {
+                    settings.setMultiRowInsertBatch(multiRowInsertBatch.getSelection());
+                }
+            });
+            multiRowInsertBatch.setLayoutData(new GridData(GridData.HORIZONTAL_ALIGN_BEGINNING, GridData.VERTICAL_ALIGN_BEGINNING, false, false, 3, 1));
+
+
+            useBatchCheck = UIUtils.createCheckbox(performanceSettings, DTUIMessages.database_consumer_wizard_disable_import_batches_label, DTUIMessages.database_consumer_wizard_disable_import_batches_description, settings.isDisableUsingBatches(), 4);
             useBatchCheck.addSelectionListener(new SelectionAdapter() {
                 @Override
                 public void widgetSelected(SelectionEvent e) {
                     settings.setDisableUsingBatches(useBatchCheck.getSelection());
+                    if (useBatchCheck.getSelection()) {
+                        useMultiRowInsert.setSelection(false);
+                        useMultiRowInsert.setEnabled(false);
+                        settings.setUseMultiRowInsert(false);
+                        multiRowInsertBatch.setEnabled(false);
+                    } else if (!useBatchCheck.getSelection() && !useMultiRowInsert.getEnabled()) {
+                        useMultiRowInsert.setEnabled(true);
+                    }
                 }
             });
         }
@@ -194,8 +239,11 @@ public class DatabaseConsumerPageLoadSettings extends ActiveWizardPage<DataTrans
     }
 
     private void loadUISettingsForDisableReferentialIntegrityCheckbox() {
+        isDisablingReferentialIntegritySupported = false;
+        disableReferentialIntegrityCheckboxTooltip = "";
         try {
             getWizard().getRunnableContext().run(false, false, monitor -> {
+                Collection<String> statements = new LinkedHashSet<>();
                 for (DatabaseMappingContainer mappingContainer : getSettings().getDataMappings().values()) {
                     if (!(mappingContainer.getTarget() instanceof DBPReferentialIntegrityController)) {
                         continue;
@@ -204,19 +252,21 @@ public class DatabaseConsumerPageLoadSettings extends ActiveWizardPage<DataTrans
                     try {
                         if (controller.supportsChangingReferentialIntegrity(monitor)) {
                             isDisablingReferentialIntegritySupported = true;
-                            String caveat = controller.getReferentialIntegrityDisableWarning(monitor);
-                            if (caveat.isEmpty()) {
-                                disableReferentialIntegrityCheckboxTooltip =
-                                    DTUIMessages.database_consumer_wizard_disable_referential_integrity_tip_no_caveats;
-                            } else {
-                                disableReferentialIntegrityCheckboxTooltip =
-                                    DTUIMessages.database_consumer_wizard_disable_referential_integrity_tip_with_caveats + "\n" + caveat;
-                            }
-                            return;
+                            statements.add(controller.getChangeReferentialIntegrityStatement(monitor, false));
+                            statements.add(controller.getChangeReferentialIntegrityStatement(monitor, true));
                         }
                     } catch (DBException e) {
                         log.debug("Unexpected error when calculating UI options for 'Disable referential integrity' checkbox", e);
                     }
+                }
+                if (!statements.isEmpty()) {
+                    StringJoiner tooltip = new StringJoiner(
+                        System.lineSeparator(),
+                        DTUIMessages.database_consumer_wizard_disable_referential_integrity_tip_start + System.lineSeparator(),
+                        ""
+                    );
+                    statements.forEach(tooltip::add);
+                    disableReferentialIntegrityCheckboxTooltip = tooltip.toString();
                 }
             });
         } catch (InvocationTargetException e) {
@@ -291,7 +341,7 @@ public class DatabaseConsumerPageLoadSettings extends ActiveWizardPage<DataTrans
             onDuplicateKeyInsertMethods.setEnabled(false);
             Label descLabel = new Label(loadSettings, SWT.NONE);
             descLabel.setLayoutData(new GridData(GridData.HORIZONTAL_ALIGN_BEGINNING, GridData.VERTICAL_ALIGN_BEGINNING, false, false, 2, 1));
-            descLabel.setText("Replace method not supported by target database");
+            descLabel.setText(DTUIMessages.database_consumer_wizard_label_replace_method_not_supported);
             if (!CommonUtils.isEmpty(settings.getOnDuplicateKeyInsertMethodId())) {
                 // May be this setting was used for another database
                 settings.setOnDuplicateKeyInsertMethodId(null);

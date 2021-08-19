@@ -21,21 +21,21 @@ import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.MultiStatus;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.core.runtime.jobs.Job;
-import org.eclipse.draw2d.IFigure;
-import org.eclipse.draw2d.PrintFigureOperation;
-import org.eclipse.draw2d.geometry.Dimension;
-import org.eclipse.draw2d.geometry.Insets;
-import org.eclipse.gef.*;
-import org.eclipse.gef.commands.CommandStack;
-import org.eclipse.gef.editparts.ScalableFreeformRootEditPart;
-import org.eclipse.gef.editparts.ZoomManager;
-import org.eclipse.gef.palette.PaletteRoot;
-import org.eclipse.gef.ui.actions.*;
-import org.eclipse.gef.ui.palette.FlyoutPaletteComposite;
-import org.eclipse.gef.ui.palette.PaletteViewerProvider;
-import org.eclipse.gef.ui.parts.GraphicalEditorWithFlyoutPalette;
-import org.eclipse.gef.ui.parts.GraphicalViewerKeyHandler;
-import org.eclipse.gef.ui.properties.UndoablePropertySheetEntry;
+import org.eclipse.draw2dl.IFigure;
+import org.eclipse.draw2dl.PrintFigureOperation;
+import org.eclipse.draw2dl.geometry.Dimension;
+import org.eclipse.draw2dl.geometry.Insets;
+import org.eclipse.gef3.*;
+import org.eclipse.gef3.commands.CommandStack;
+import org.eclipse.gef3.editparts.ScalableFreeformRootEditPart;
+import org.eclipse.gef3.editparts.ZoomManager;
+import org.eclipse.gef3.palette.PaletteRoot;
+import org.eclipse.gef3.ui.actions.*;
+import org.eclipse.gef3.ui.palette.FlyoutPaletteComposite;
+import org.eclipse.gef3.ui.palette.PaletteViewerProvider;
+import org.eclipse.gef3.ui.parts.GraphicalEditorWithFlyoutPalette;
+import org.eclipse.gef3.ui.parts.GraphicalViewerKeyHandler;
+import org.eclipse.gef3.ui.properties.UndoablePropertySheetEntry;
 import org.eclipse.jface.action.*;
 import org.eclipse.jface.util.IPropertyChangeListener;
 import org.eclipse.jface.util.PropertyChangeEvent;
@@ -54,13 +54,13 @@ import org.eclipse.ui.model.WorkbenchAdapter;
 import org.eclipse.ui.views.contentoutline.IContentOutlinePage;
 import org.eclipse.ui.views.properties.IPropertySheetPage;
 import org.eclipse.ui.views.properties.PropertySheetPage;
+import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
+import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.erd.model.*;
 import org.jkiss.dbeaver.erd.ui.ERDUIConstants;
-import org.jkiss.dbeaver.erd.ui.action.DiagramLayoutAction;
-import org.jkiss.dbeaver.erd.ui.action.DiagramToggleGridAction;
-import org.jkiss.dbeaver.erd.ui.action.ERDEditorPropertyTester;
+import org.jkiss.dbeaver.erd.ui.action.*;
 import org.jkiss.dbeaver.erd.ui.directedit.StatusLineValidationMessageHandler;
 import org.jkiss.dbeaver.erd.ui.dnd.DataEditDropTargetListener;
 import org.jkiss.dbeaver.erd.ui.dnd.NodeDropTargetListener;
@@ -82,10 +82,12 @@ import org.jkiss.dbeaver.erd.ui.part.NodePart;
 import org.jkiss.dbeaver.erd.ui.part.NotePart;
 import org.jkiss.dbeaver.model.DBPDataSourceTask;
 import org.jkiss.dbeaver.model.DBPNamedObject;
+import org.jkiss.dbeaver.model.app.DBPProject;
 import org.jkiss.dbeaver.model.edit.DBECommandContext;
 import org.jkiss.dbeaver.model.navigator.DBNNode;
 import org.jkiss.dbeaver.model.preferences.DBPPreferenceStore;
 import org.jkiss.dbeaver.model.runtime.load.ILoadService;
+import org.jkiss.dbeaver.model.sql.SQLUtils;
 import org.jkiss.dbeaver.model.struct.DBSEntity;
 import org.jkiss.dbeaver.model.struct.DBSObject;
 import org.jkiss.dbeaver.runtime.DBWorkbench;
@@ -98,23 +100,24 @@ import org.jkiss.dbeaver.ui.editors.IDatabaseEditorInput;
 import org.jkiss.dbeaver.ui.editors.IDatabaseModellerEditor;
 import org.jkiss.dbeaver.ui.navigator.INavigatorModelView;
 import org.jkiss.dbeaver.ui.navigator.actions.ToggleViewAction;
-import org.jkiss.dbeaver.ui.navigator.itemlist.ObjectSearcher;
 import org.jkiss.utils.ArrayUtils;
 import org.jkiss.utils.CommonUtils;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.EventObject;
 import java.util.List;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 /**
  * Editor implementation based on the the example editor skeleton that is built in <i>Building
- * an editor </i> in chapter <i>Introduction to GEF </i>
+ * an editor </i> in chapter <i>Introduction to .gef3 </i>
  */
 public abstract class ERDEditorPart extends GraphicalEditorWithFlyoutPalette
-    implements DBPDataSourceTask, IDatabaseModellerEditor, ISearchContextProvider, IRefreshablePart, INavigatorModelView
-{
+        implements DBPDataSourceTask, IDatabaseModellerEditor, ISearchContextProvider, IRefreshablePart, INavigatorModelView {
+    private static final Log log = Log.getLog(Searcher.class);
+
     @Nullable
     protected ProgressControl progressControl;
 
@@ -309,7 +312,7 @@ public abstract class ERDEditorPart extends GraphicalEditorWithFlyoutPalette
     @Override
     public Object getAdapter(Class adapter)
     {
-        // we need to handle common GEF elements we created
+        // we need to handle common .gef3 elements we created
         if (adapter == GraphicalViewer.class || adapter == EditPartViewer.class) {
             return getGraphicalViewer();
         } else if (adapter == CommandStack.class) {
@@ -526,6 +529,7 @@ public abstract class ERDEditorPart extends GraphicalEditorWithFlyoutPalette
         IAction zoomOut = new ZoomOutAction(zoomManager);
         addAction(zoomIn);
         addAction(zoomOut);
+        addAction(new DiagramToggleHandAction(editDomain.getPaletteViewer()));
 
         graphicalViewer.addSelectionChangedListener(event -> {
             String status;
@@ -934,6 +938,7 @@ public abstract class ERDEditorPart extends GraphicalEditorWithFlyoutPalette
         //toolBarManager.add(createAttributeVisibilityMenu());
         toolBarManager.add(new DiagramLayoutAction(ERDEditorPart.this));
         toolBarManager.add(new DiagramToggleGridAction());
+        toolBarManager.add(new DiagramToggleHandAction(editDomain.getPaletteViewer()));
         toolBarManager.add(new Separator());
         toolBarManager.add(new ToggleViewAction(IPageLayout.ID_PROP_SHEET));
         toolBarManager.add(new ToggleViewAction(IPageLayout.ID_OUTLINE));
@@ -951,6 +956,9 @@ public abstract class ERDEditorPart extends GraphicalEditorWithFlyoutPalette
                 IWorkbenchCommandConstants.FILE_SAVE_AS,
                 ERDUIMessages.erd_editor_control_action_save_external_format,
                 UIIcon.PICTURE_SAVE));
+
+            DiagramExportAction saveDiagram = new DiagramExportAction(this, getSite().getShell());
+            toolBarManager.add(saveDiagram);
         }
         toolBarManager.add(new Separator());
         {
@@ -970,6 +978,9 @@ public abstract class ERDEditorPart extends GraphicalEditorWithFlyoutPalette
     }
 
     protected abstract void loadDiagram(boolean refreshMetadata);
+
+    @NotNull
+    public abstract DBPProject getDiagramProject();
 
     @Override
     public boolean isActiveTask() {
@@ -1238,39 +1249,63 @@ public abstract class ERDEditorPart extends GraphicalEditorWithFlyoutPalette
         return hasChanges;
     }
 
-    private class Searcher extends ObjectSearcher<DBPNamedObject> {
+    private class Searcher implements ISearchExecutor {
+        @Nullable
+        private Pattern curSearchPattern;
+        private boolean resultsFound;
 
         @Override
-        protected void setInfo(String message)
-        {
-            progressControl.setInfo(message);
+        public boolean performSearch(@NotNull String searchString, int options) {
+            String likePattern = SQLUtils.makeLikePattern(searchString);
+            if (likePattern.isEmpty() || (curSearchPattern != null && likePattern.equals(curSearchPattern.pattern()))) {
+                return resultsFound;
+            }
+
+            try {
+                curSearchPattern = Pattern.compile(likePattern, Pattern.CASE_INSENSITIVE);
+            } catch (PatternSyntaxException e) {
+                log.warn("Unable to perform search in ERD editor due to an inability to compile search pattern", e);
+                if (progressControl != null) {
+                    progressControl.setInfo(e.getMessage());
+                }
+                return false;
+            }
+
+            resultsFound = false;
+            ERDGraphicalViewer graphicalViewer = getGraphicalViewer();
+            graphicalViewer.deselectAll();
+            List<?> nodes = getDiagramPart().getChildren();
+            if (!CommonUtils.isEmpty(nodes)) {
+                Object obj = nodes.get(0);
+                if (obj instanceof DBPNamedObject && obj instanceof EditPart) {
+                    for (Object node: nodes) {
+                        if (matchesSearch((DBPNamedObject) node)) {
+                            resultsFound = true;
+                            graphicalViewer.appendSelection((EditPart) node);
+                            graphicalViewer.reveal((EditPart) node);
+                        }
+                    }
+                }
+            }
+            return resultsFound;
         }
 
         @Override
-        protected Collection<DBPNamedObject> getContent()
-        {
-            return getDiagramPart().getChildren();
-        }
-
-        @Override
-        protected void selectObject(DBPNamedObject object)
-        {
-            if (object == null) {
-                getGraphicalViewer().deselectAll();
-            } else {
-                getGraphicalViewer().select((EditPart)object);
+        public void cancelSearch() {
+            if (curSearchPattern != null) {
+                curSearchPattern = null;
+                if (resultsFound) {
+                    resultsFound = false;
+                    getGraphicalViewer().deselectAll();
+                }
             }
         }
 
-        @Override
-        protected void updateObject(DBPNamedObject object)
-        {
-        }
-
-        @Override
-        protected void revealObject(DBPNamedObject object)
-        {
-            getGraphicalViewer().reveal((EditPart)object);
+        private boolean matchesSearch(@Nullable DBPNamedObject element) {
+            if (curSearchPattern == null || element == null) {
+                return false;
+            }
+            return curSearchPattern.matcher(element.getName()).find();
         }
     }
 

@@ -46,6 +46,8 @@ public class ResultSetMessages extends NLS {
 
     public static String controls_resultset_filter_button_reset;
     public static String controls_resultset_filter_column_name;
+    public static String controls_resultset_filter_column_visible;
+    public static String controls_resultset_filter_column_pinned;
     public static String controls_resultset_filter_column_criteria;
     public static String controls_resultset_filter_column_order;
     public static String controls_resultset_filter_group_columns;
@@ -98,6 +100,10 @@ public class ResultSetMessages extends NLS {
     public static String controls_resultset_viewer_status_rows_size;
     public static String controls_resultset_viewer_value;
     public static String controls_resultset_viewer_calculate_row_count;
+    public static String controls_resultset_viewer_pin_column;
+    public static String controls_resultset_viewer_pin_columns;
+    public static String controls_resultset_viewer_unpin_column;
+    public static String controls_resultset_viewer_unpin_columns;
     public static String controls_resultset_viewer_hide_column_x;
     public static String controls_resultset_viewer_hide_columns_x;
     public static String controls_resultset_viewer_hide_columns_error_title;
@@ -180,12 +186,13 @@ public class ResultSetMessages extends NLS {
     public static String dialog_filter_value_edit_table_description_description;
     public static String dialog_filter_value_edit_table_count_label;
     public static String dialog_filter_value_edit_table_count_description;
-    public static String dialog_filter_value_edit_table_checkbox_case_insensitive_label;
-    public static String dialog_filter_value_edit_table_checkbox_case_insensitive_description;
-    public static String dialog_filter_value_edit_table_checkbox_read_from_server_label;
-    public static String dialog_filter_value_edit_table_checkbox_read_from_server_description;
-    public static String dialog_filter_value_edit_table_checkbox_show_row_count_label;
-    public static String dialog_filter_value_edit_table_checkbox_show_row_count_description;
+    public static String dialog_filter_value_edit_table_group_options;
+    public static String dialog_filter_value_edit_table_options_checkbox_case_insensitive_label;
+    public static String dialog_filter_value_edit_table_options_checkbox_case_insensitive_description;
+    public static String dialog_filter_value_edit_table_options_checkbox_read_from_server_label;
+    public static String dialog_filter_value_edit_table_options_checkbox_read_from_server_description;
+    public static String dialog_filter_value_edit_table_options_checkbox_show_row_count_label;
+    public static String dialog_filter_value_edit_table_options_checkbox_show_row_count_description;
 
     public static String dialog_control_label_massage;
     public static String dialog_cursor_view_monitor_rows_fetched;
@@ -282,6 +289,8 @@ public class ResultSetMessages extends NLS {
     public static String pref_page_database_resultsets_group_string;
     public static String pref_page_database_resultsets_checkbox_string_use_editor;
     public static String pref_page_database_resultsets_checkbox_string_use_editor_tip;
+    public static String pref_page_database_resultsets_label_replace_nulls_to_default;
+    public static String pref_page_database_resultsets_label_replace_nulls_to_default_tip;
 
     public static String pref_page_database_resultsets_label_read_metadata_tip;
     public static String pref_page_database_resultsets_label_read_references_tip;

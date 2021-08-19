@@ -1084,11 +1084,11 @@ public class OracleSchema extends OracleGlobalObject implements DBSSchema, DBPRe
                     "i.OWNER,i.INDEX_NAME,i.INDEX_TYPE,i.TABLE_OWNER,i.TABLE_NAME,i.UNIQUENESS,i.TABLESPACE_NAME,i.STATUS,i.NUM_ROWS,i.SAMPLE_SIZE,\n" +
                     "ic.COLUMN_NAME,ic.COLUMN_POSITION,ic.COLUMN_LENGTH,ic.DESCEND,iex.COLUMN_EXPRESSION\n" +
                     "FROM " + OracleUtils.getAdminAllViewPrefix(session.getProgressMonitor(), getDataSource(), "INDEXES") + " i\n" +
-                    ", " + OracleUtils.getAdminAllViewPrefix(session.getProgressMonitor(), getDataSource(), "IND_COLUMNS") + " ic, " +
-                    OracleUtils.getAdminAllViewPrefix(session.getProgressMonitor(), getDataSource(), "IND_EXPRESSIONS") + " iex " +
-                    "WHERE ic.INDEX_OWNER=i.OWNER AND ic.INDEX_NAME=i.INDEX_NAME \n" +
-                    "AND iex.INDEX_OWNER(+)=i.OWNER AND iex.INDEX_NAME(+)=i.INDEX_NAME AND iex.COLUMN_POSITION(+)=ic.COLUMN_POSITION\n" +
-                    "AND ");
+                    "JOIN " + OracleUtils.getAdminAllViewPrefix(session.getProgressMonitor(), getDataSource(), "IND_COLUMNS") + " ic " +
+                    "ON i.owner = ic.index_owner AND i.index_name = ic.index_name\n" +
+                    "LEFT JOIN " + OracleUtils.getAdminAllViewPrefix(session.getProgressMonitor(), getDataSource(), "IND_EXPRESSIONS") + " iex " +
+                    "ON iex.index_owner = i.owner AND iex.INDEX_NAME = i.INDEX_NAME AND iex.COLUMN_POSITION = ic.COLUMN_POSITION\n" +
+                    "WHERE ");
             if (forTable == null) {
                 sql.append("i.OWNER=?");
             } else {
@@ -1377,7 +1377,7 @@ public class OracleSchema extends OracleGlobalObject implements DBSSchema, DBPRe
                 OracleUtils.getAdminAllViewPrefix(session.getProgressMonitor(), schema.getDataSource(), "TRIGGERS") + " t, " +
                 OracleUtils.getAdminAllViewPrefix(session.getProgressMonitor(), schema.getDataSource(), "TRIGGER_COLS") + " c" +
                 "\nWHERE t.TABLE_OWNER=?" + (table == null ? "" : " AND t.TABLE_NAME=?") +
-                " AND t.BASE_OBJECT_TYPE='TABLE' AND t.TABLE_OWNER=c.TABLE_OWNER(+) AND t.TABLE_NAME=c.TABLE_NAME(+)" +
+                " AND t.BASE_OBJECT_TYPE=" + (table instanceof OracleView ? "'VIEW'" : "'TABLE'") + " AND t.TABLE_OWNER=c.TABLE_OWNER(+) AND t.TABLE_NAME=c.TABLE_NAME(+)" +
                 " AND t.OWNER=c.TRIGGER_OWNER(+) AND t.TRIGGER_NAME=c.TRIGGER_NAME(+)" +
                 "\nORDER BY t.TRIGGER_NAME"
             );

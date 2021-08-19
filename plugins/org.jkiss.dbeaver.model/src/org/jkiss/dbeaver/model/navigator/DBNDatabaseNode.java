@@ -22,6 +22,7 @@ import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.model.*;
 import org.jkiss.dbeaver.model.access.DBAObject;
+import org.jkiss.dbeaver.model.exec.DBCException;
 import org.jkiss.dbeaver.model.exec.DBCExecutionContext;
 import org.jkiss.dbeaver.model.exec.DBExecUtils;
 import org.jkiss.dbeaver.model.messages.ModelMessages;
@@ -116,11 +117,16 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBNLazyNode, DB
             {
                 objectName = object.getParentObject().getName() + "." + object.getName();
             } else {
-                objectName = object.getName();
+                if (object instanceof DBSEntity && object.getDataSource().getContainer().getNavigatorSettings().isMergeEntities()) {
+                    objectName = DBUtils.getObjectFullName(object, DBPEvaluationContext.UI);
+                } else {
+                    objectName = object.getName();
+                }
             }
         } else {
             objectName = object.getName();
         }
+
         if (showDefaults && CommonUtils.isEmpty(objectName)) {
             objectName = object.toString();
             if (CommonUtils.isEmpty(objectName)) {
@@ -440,13 +446,18 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBNLazyNode, DB
             if (showOnlyEntities && !isEntityMeta(child)) {
                 continue;
             }
+
             if (child instanceof DBXTreeItem) {
                 final DBXTreeItem item = (DBXTreeItem) child;
-                boolean isLoaded = loadTreeItems(monitor, item, oldList, toList, source, showSystem, hideFolders, reflect);
-                if (!isLoaded && item.isOptional() && item.getRecursiveLink() == null) {
-                    // This may occur only if no child nodes was read
-                    // Then we try to go on next DBX level
-                    loadChildren(monitor, item, oldList, toList, source, reflect);
+                /*if (hideSchemas && isSchemaItem(item)) {
+                    // Merge
+                } else */{
+                    boolean isLoaded = loadTreeItems(monitor, item, oldList, toList, source, showSystem, hideFolders, reflect);
+                    if (!isLoaded && item.isOptional() && item.getRecursiveLink() == null) {
+                        // This may occur only if no child nodes was read
+                        // Then we try to go on next DBX level
+                        loadChildren(monitor, item, oldList, toList, source, reflect);
+                    }
                 }
             } else if (child instanceof DBXTreeFolder) {
                 if (hideFolders) {
@@ -456,6 +467,21 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBNLazyNode, DB
                     // Fall down
                     loadChildren(monitor, child, oldList, toList, source, reflect);
                 } else {
+                    String optionalPath = ((DBXTreeFolder) child).getOptionalItem();
+                    if (optionalPath != null) {
+                        DBXTreeItem optionalItem = ((DBXTreeFolder) child).getChildByPath(optionalPath);
+                        if (optionalItem == null) {
+                            log.error("Optional item '" + optionalPath + "' not found in folder " + child.getId());
+                        } else {
+                            Object optionalValue = extractPropertyValue(monitor, getValueObject(), optionalItem);
+                            if (optionalValue == null || (optionalValue instanceof Collection && ((Collection<?>) optionalValue).isEmpty())) {
+                                // Go on next DBX level
+                                loadChildren(monitor, optionalItem, oldList, toList, source, reflect);
+                                continue;
+                            }
+                        }
+                    }
+
                     if (oldList == null) {
                         // Load new folders only if there are no old ones
                         toList.add(
@@ -541,7 +567,8 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBNLazyNode, DB
         boolean hideFolders,
         boolean reflect)
         throws DBException {
-        if (this.isDisposed()) {
+        if (this.isDisposed())
+        {
             // Property reading can take really long time so this node can be disposed at this moment -
             // check it
             return false;
@@ -552,7 +579,18 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBNLazyNode, DB
             return false;
         }
         final PropertyValueReader valueReader = new PropertyValueReader(monitor, meta, valueObject);
-        DBExecUtils.tryExecuteRecover(monitor, getDataSource(), valueReader);
+        DBPDataSource dataSource = getDataSource();
+        if (dataSource != null) {
+            DBExecUtils.tryExecuteRecover(monitor, dataSource, valueReader);
+        } else {
+            try {
+                valueReader.run(monitor);
+            } catch (InvocationTargetException e) {
+                throw new DBCException("Error reading child elements", e.getTargetException());
+            } catch (InterruptedException e) {
+                return false;
+            }
+        }
         final Object propertyValue = valueReader.propertyValue;
         if (propertyValue == null) {
             return false;

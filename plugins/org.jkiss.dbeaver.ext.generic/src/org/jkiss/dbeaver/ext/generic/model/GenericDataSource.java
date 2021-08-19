@@ -313,6 +313,20 @@ public class GenericDataSource extends JDBCDataSource implements DBPTermProvider
         return DBUtils.findObject(getCatalogs(), name);
     }
 
+    public final Collection<GenericCatalog> getCatalogList() {
+//        if (getDataSource().isMergeEntities()) {
+//            return null;
+//        }
+        return getCatalogs();
+    }
+
+    public final Collection<GenericSchema> getSchemaList() {
+        if (getDataSource().isMergeEntities()) {
+            return null;
+        }
+        return getSchemas();
+    }
+
     @Association
     public List<GenericSchema> getSchemas() {
         return schemas;
@@ -548,7 +562,7 @@ public class GenericDataSource extends JDBCDataSource implements DBPTermProvider
                     }
                 }
 
-                if (CommonUtils.isEmpty(schemas)) {
+                if (isMergeEntities() || (CommonUtils.isEmpty(schemas))) {
                     this.structureContainer = new DataSourceObjectContainer();
                 }
             }
@@ -722,6 +736,10 @@ public class GenericDataSource extends JDBCDataSource implements DBPTermProvider
 
     void setSelectedEntityFromAPI(boolean selectedEntityFromAPI) {
         this.selectedEntityFromAPI = selectedEntityFromAPI;
+    }
+
+    public boolean isMergeEntities() {
+        return getContainer().getNavigatorSettings().isMergeEntities();
     }
 
     @Override

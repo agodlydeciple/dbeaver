@@ -96,7 +96,7 @@ public class PostgreExecutionContext extends JDBCExecutionContext implements DBC
             catalog.checkInstanceConnection(monitor);
 
             DBSObject oldInstance = getOwnerInstance();
-            boolean changed = false;
+            boolean catalogChanged = false, schemaChanged = false;
             if (oldInstance != catalog) {
                 // Changing catalog means reconnect
                 // Change it only for isolated editor contexts
@@ -107,12 +107,19 @@ public class PostgreExecutionContext extends JDBCExecutionContext implements DBC
                 } else {
                     getDataSource().setActiveDatabase(catalog);
                 }
-                changed = true;
+                catalogChanged = true;
             }
             if (schema != null) {
-                changed = changeDefaultSchema(monitor, schema, true, force);
+                if (catalogChanged) {
+                    // Catalog has been changed. Get the new one and change schema there
+                    PostgreDatabase newInstance = getDataSource().getDefaultInstance();
+                    PostgreExecutionContext newContext = (PostgreExecutionContext) newInstance.getDefaultContext(false);
+                    newContext.changeDefaultSchema(monitor, schema, true, force);
+                } else {
+                    schemaChanged = changeDefaultSchema(monitor, schema, true, force);
+                }
             }
-            if (changed) {
+            if (catalogChanged || schemaChanged) {
                 DBUtils.fireObjectSelectionChange(oldInstance, catalog);
             }
         } catch (DBException e) {
@@ -260,14 +267,15 @@ public class PostgreExecutionContext extends JDBCExecutionContext implements DBC
         }
     }
 
-    void setSessionRole(final DBRProgressMonitor monitor) throws DBCException {
+    private void setSessionRole(@NotNull DBRProgressMonitor monitor) throws DBCException {
         final String roleName = getDataSource().getContainer().getConnectionConfiguration().getProviderProperty(PostgreConstants.PROP_CHOSEN_ROLE);
         if (CommonUtils.isEmpty(roleName)) {
             return;
         }
         try (JDBCSession session = openSession(monitor, DBCExecutionPurpose.UTIL, "Set active role")) {
             try (JDBCStatement dbStat = session.createStatement()) {
-                dbStat.executeUpdate("SET ROLE " + roleName);
+                String sql = "SET ROLE " + getDataSource().getSQLDialect().getQuotedIdentifier(roleName, false, true);
+                dbStat.executeUpdate(sql);
             }
         } catch (SQLException e) {
             throw new DBCException(e, this);

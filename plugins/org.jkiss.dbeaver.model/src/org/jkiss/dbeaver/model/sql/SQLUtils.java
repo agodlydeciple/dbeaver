@@ -162,8 +162,8 @@ public final class SQLUtils {
         return like.indexOf('%') != -1 || like.indexOf('*') != -1 || like.indexOf('_') != -1 || like.indexOf('?') != -1;// || like.indexOf('_') != -1;
     }
 
-    public static String makeLikePattern(String like)
-    {
+    @NotNull
+    public static String makeLikePattern(@NotNull String like) {
         StringBuilder result = new StringBuilder();
 
         for (int i = 0; i < like.length(); i++) {
@@ -176,7 +176,7 @@ public final class SQLUtils {
             else if (c == '\\') {
                 if (i < like.length() - 1) {
                     char nc = like.charAt(i + 1);
-                    if (nc == '_' || nc == '*' || nc == '?' || nc == '.') {
+                    if (nc == '_' || nc == '*' || nc == '?' || nc == '.' || nc == '%') {
                         result.append("\\").append(nc);
                         i++;
                     } else {
@@ -189,6 +189,28 @@ public final class SQLUtils {
             }
         }
         return result.toString();
+    }
+
+    @NotNull
+    public static String makeRegexFromLike(@NotNull String clause) {
+        final StringBuilder sb = new StringBuilder();
+        for (int index = 0, length = clause.length(); index < length; index++) {
+            final char ch = clause.charAt(index);
+            if (ch == '%') {
+                if (index > 0 && index < length - 1) {
+                    sb.append(".*");
+                }
+            } else {
+                if (index == 0) {
+                    sb.append('^');
+                }
+                sb.append(ch == '_' ? '.' : ch);
+                if (index == length - 1) {
+                    sb.append('$');
+                }
+            }
+        }
+        return sb.toString();
     }
 
     public static String makeSQLLike(String like)
@@ -435,16 +457,21 @@ public final class SQLUtils {
         @NotNull StringBuilder query,
         boolean inlineCriteria)
     {
-        String operator = filter.isAnyConstraint() ? " OR " : " AND ";  //$NON-NLS-1$ $NON-NLS-2$
-        boolean hasWhere = false;
-        for (DBDAttributeConstraint constraint : filter.getConstraints()) {
-            String condition = getConstraintCondition(dataSource, constraint, inlineCriteria);
-            if (condition == null) {
-                continue;
-            }
+        final String operator = filter.isAnyConstraint() ? " OR " : " AND ";  //$NON-NLS-1$ $NON-NLS-2$
+        final DBDAttributeConstraint[] constraints = filter.getConstraints().stream()
+            .filter(x -> x.getCriteria() != null || x.getOperator() != null)
+            .toArray(DBDAttributeConstraint[]::new);
 
-            if (hasWhere) query.append(operator);
-            hasWhere = true;
+        for (int index = 0; index < constraints.length; index++) {
+            final DBDAttributeConstraint constraint = constraints[index];
+            if (index > 0) {
+                query.append(operator);
+            }
+            if (constraints.length > 1) {
+                // Add parenthesis for the sake of sanity
+                // Constraint may consist of several conditions and we don't want to break operator precedence
+                query.append('(');
+            }
             if (constraint.getEntityAlias() != null) {
                 query.append(constraint.getEntityAlias()).append('.');
             } else if (conditionTable != null) {
@@ -470,11 +497,16 @@ public final class SQLUtils {
             } else {
                 attrName = DBUtils.getQuotedIdentifier(dataSource, constraint.getAttributeName());
             }
-            query.append(attrName).append(' ').append(condition);
+            query.append(attrName).append(' ').append(getConstraintCondition(dataSource, constraint, conditionTable, inlineCriteria));
+            if (constraints.length > 1) {
+                query.append(')');
+            }
         }
 
         if (!CommonUtils.isEmpty(filter.getWhere())) {
-            if (hasWhere) query.append(operator);
+            if (constraints.length > 1) {
+                query.append(operator);
+            }
             query.append(filter.getWhere());
         }
     }
@@ -486,7 +518,7 @@ public final class SQLUtils {
         for (DBDAttributeConstraint co : filter.getOrderConstraints()) {
             if (hasOrder) query.append(',');
             String orderString = null;
-            if (co.getAttribute() == null || co.getAttribute() instanceof DBDAttributeBindingMeta || co.getAttribute() instanceof DBDAttributeBindingType) {
+            if (co.isPlainNameReference() || co.getAttribute() == null || co.getAttribute() instanceof DBDAttributeBindingMeta || co.getAttribute() instanceof DBDAttributeBindingType) {
                 String orderColumn = co.getAttributeName();
                 if (co.getAttribute() == null || PATTERN_SIMPLE_NAME.matcher(orderColumn).matches()) {
                     // It is a simple column.
@@ -519,7 +551,7 @@ public final class SQLUtils {
     }
 
     @Nullable
-    public static String getConstraintCondition(@NotNull DBPDataSource dataSource, @NotNull DBDAttributeConstraint constraint, boolean inlineCriteria) {
+    public static String getConstraintCondition(@NotNull DBPDataSource dataSource, @NotNull DBDAttributeConstraint constraint, @Nullable String conditionTable, boolean inlineCriteria) {
         String criteria = constraint.getCriteria();
         if (!CommonUtils.isEmpty(criteria)) {
             final char firstChar = criteria.trim().charAt(0);
@@ -584,7 +616,11 @@ public final class SQLUtils {
                     return "IS NULL";
                 }
                 if (hasNull) {
-                    conString.append("IS NULL OR ").append(DBUtils.getObjectFullName(dataSource, constraint.getAttribute(), DBPEvaluationContext.DML)).append(" ");
+                    conString.append("IS NULL OR ");
+                    if (conditionTable != null) {
+                        conString.append(conditionTable).append('.');
+                    }
+                    conString.append(DBUtils.getObjectFullName(dataSource, constraint.getAttribute(), DBPEvaluationContext.DML)).append(" ");
                 }
 
                 conString.append(operator.getExpression());
@@ -648,12 +684,6 @@ public final class SQLUtils {
 
         DBPDataKind dataKind = attribute.getDataKind();
         switch (dataKind) {
-            case BOOLEAN:
-            case NUMERIC:
-                if (sqlDialect != null) {
-                    return sqlDialect.escapeScriptValue(attribute, value, strValue);
-                }
-                return strValue;
             case CONTENT:
                 if (value instanceof DBDContent) {
                     String contentType = ((DBDContent) value).getContentType();
@@ -665,9 +695,11 @@ public final class SQLUtils {
             case STRING:
             case ROWID:
                 if (sqlDialect != null) {
-                    return sqlDialect.getTypeCastClause(attribute, sqlDialect.getQuotedString(strValue));
+                    return sqlDialect.getQuotedString(strValue);
                 }
                 return strValue;
+            case BOOLEAN:
+            case NUMERIC:
             default:
                 if (sqlDialect != null) {
                     return sqlDialect.escapeScriptValue(attribute, value, strValue);

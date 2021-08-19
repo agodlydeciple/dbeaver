@@ -19,16 +19,17 @@
  */
 package org.jkiss.dbeaver.erd.ui.editor;
 
-import org.eclipse.draw2d.geometry.Dimension;
-import org.eclipse.draw2d.geometry.Rectangle;
-import org.eclipse.gef.*;
-import org.eclipse.gef.palette.PaletteContainer;
-import org.eclipse.gef.palette.PaletteDrawer;
-import org.eclipse.gef.palette.PaletteRoot;
-import org.eclipse.gef.palette.ToolEntry;
-import org.eclipse.gef.tools.SelectionTool;
-import org.eclipse.gef.ui.parts.AbstractEditPartViewer;
-import org.eclipse.gef.ui.parts.ScrollingGraphicalViewer;
+import org.eclipse.draw2dl.FigureCanvas;
+import org.eclipse.draw2dl.geometry.Dimension;
+import org.eclipse.draw2dl.geometry.Rectangle;
+import org.eclipse.gef3.*;
+import org.eclipse.gef3.palette.PaletteContainer;
+import org.eclipse.gef3.palette.PaletteDrawer;
+import org.eclipse.gef3.palette.PaletteRoot;
+import org.eclipse.gef3.palette.ToolEntry;
+import org.eclipse.gef3.tools.SelectionTool;
+import org.eclipse.gef3.ui.parts.AbstractEditPartViewer;
+import org.eclipse.gef3.ui.parts.ScrollingGraphicalViewer;
 import org.eclipse.jface.util.IPropertyChangeListener;
 import org.eclipse.jface.util.PropertyChangeEvent;
 import org.eclipse.swt.SWT;
@@ -38,6 +39,8 @@ import org.eclipse.swt.graphics.Font;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
+import org.eclipse.swt.widgets.Event;
+import org.eclipse.swt.widgets.ScrollBar;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IWorkbenchPartSite;
 import org.eclipse.ui.part.MultiPageEditorSite;
@@ -101,7 +104,7 @@ public class ERDGraphicalViewer extends ScrollingGraphicalViewer implements IPro
         themeManager.addPropertyChangeListener(this);
 
         setProperty(MouseWheelHandler.KeyGenerator.getKey(SWT.MOD1), MouseWheelZoomHandler.SINGLETON);
-        //setProperty(MouseWheelHandler.KeyGenerator.getKey(SWT.MOD2), MouseWheelHorizontalScrollHandler.SINGLETON);
+        setProperty(MouseWheelHandler.KeyGenerator.getKey(SWT.MOD2), MouseWheelHorizontalScrollHandler.SINGLETON);
     }
 
     public ERDEditorPart getEditor()
@@ -559,4 +562,29 @@ public class ERDGraphicalViewer extends ScrollingGraphicalViewer implements IPro
         }
     }
 
+    /**
+     * Handler that provides horizontal scrolling using mouse wheel.
+     *
+     * Copied from {@link org.eclipse.graphiti.ui.internal.util.gef3.MouseWheelHorizontalScrollHandler}
+     *
+     * @implNote this implementation differs from the source, since scrolling direction is inverted.
+     * @see org.eclipse.graphiti.ui.internal.util.gef3.MouseWheelHorizontalScrollHandler
+     */
+    private static class MouseWheelHorizontalScrollHandler implements MouseWheelHandler {
+        public static final MouseWheelHandler SINGLETON = new MouseWheelHorizontalScrollHandler();
+
+        @Override
+        public void handleMouseWheel(Event event, EditPartViewer viewer) {
+            if (viewer instanceof ScrollingGraphicalViewer) {
+                final Control control = viewer.getControl();
+                if (control instanceof FigureCanvas) {
+                    final FigureCanvas canvas = (FigureCanvas) control;
+                    final ScrollBar hBar = canvas.getHorizontalBar();
+
+                    canvas.scrollToX(hBar.getSelection() - (hBar.getIncrement() * event.count));
+                    event.doit = false;
+                }
+            }
+        }
+    }
 }

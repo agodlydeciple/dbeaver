@@ -78,6 +78,7 @@ class GenericFilterValueEdit {
 
     private boolean isCheckedTable;
 
+    private static final int INPUT_DELAY_BEFORE_LOAD = 300;
     private static final int MAX_MULTI_VALUES = 1000;
     private static final String MULTI_KEY_LABEL = "...";
     private Composite buttonsPanel;
@@ -224,6 +225,16 @@ class GenericFilterValueEdit {
     }
 
     Text addFilterText(Composite composite) {
+        // Create job which will load values after specified delay
+        final AbstractJob loadValuesJob = new AbstractJob("Load values timeout") {
+            @Override
+            protected IStatus run(DBRProgressMonitor monitor) {
+                UIUtils.asyncExec(() -> loadValues(null));
+                return Status.OK_STATUS;
+            }
+        };
+        loadValuesJob.setSystem(true);
+        loadValuesJob.setUser(false);
 
         // Create filter text
         final Text valueFilterText = new Text(composite, SWT.BORDER);
@@ -233,7 +244,21 @@ class GenericFilterValueEdit {
             if (filterPattern.isEmpty()) {
                 filterPattern = null;
             }
-            loadValues(null);
+            if (!loadValuesJob.isCanceled()) {
+                loadValuesJob.cancel();
+            }
+            loadValuesJob.schedule(INPUT_DELAY_BEFORE_LOAD);
+        });
+        valueFilterText.addDisposeListener(e -> {
+            KeyLoadJob curLoadJob = this.loadJob;
+            if (curLoadJob != null) {
+                if (!curLoadJob.isCanceled()) {
+                    curLoadJob.cancel();
+                }
+            }
+            if (!loadValuesJob.isCanceled()) {
+                loadValuesJob.cancel();
+            }
         });
         return valueFilterText;
     }
@@ -256,6 +281,8 @@ class GenericFilterValueEdit {
                 loadConstraintEnum(enumerableConstraint, onFinish);
             } else if (attribute.getEntityAttribute() instanceof DBSAttributeEnumerable) {
                 loadAttributeEnum((DBSAttributeEnumerable) attribute.getEntityAttribute(), onFinish);
+            } else if (attribute.getDataContainer() instanceof DBSDocumentAttributeEnumerable) {
+                loadDictionaryEnum((DBSDocumentAttributeEnumerable) attribute.getDataContainer(), onFinish);
             } else {
                 loadMultiValueList(Collections.emptyList(), true);
             }
@@ -321,6 +348,32 @@ class GenericFilterValueEdit {
                             showRowCount,
                             true,
                             caseInsensitiveSearch);
+                    } catch (DBException e) {
+                        throw new InvocationTargetException(e);
+                    }
+                });
+                return result;
+            }
+        };
+        loadJob.schedule();
+    }
+
+    private void loadDictionaryEnum(@NotNull DBSDocumentAttributeEnumerable dictionaryEnumerable, @Nullable Runnable onFinish) {
+        loadJob = new KeyLoadJob("Load '" + attribute.getName() + "' values", onFinish) {
+            @NotNull
+            @Override
+            List<DBDLabelValuePair> readEnumeration(DBRProgressMonitor monitor) throws DBException {
+                final List<DBDLabelValuePair> result = new ArrayList<>();
+                DBExecUtils.tryExecuteRecover(monitor, dictionaryEnumerable.getDataSource(), param -> {
+                    try (DBCSession session = DBUtils.openUtilSession(monitor, dictionaryEnumerable, "Read value enumeration")) {
+                        result.addAll(dictionaryEnumerable.getValueEnumeration(
+                            session,
+                            attribute,
+                            filterPattern,
+                            showRowCount,
+                            caseInsensitiveSearch,
+                            MAX_MULTI_VALUES
+                        ));
                     } catch (DBException e) {
                         throw new InvocationTargetException(e);
                     }
@@ -468,6 +521,12 @@ class GenericFilterValueEdit {
     }
 
     private DBDLabelValuePair findValue(Map<Object, DBDLabelValuePair> rowData, Object cellValue) {
+        final DBDLabelValuePair value = rowData.get(cellValue);
+        if (value != null) {
+            // If we managed to found something at this point - return right away
+            return value;
+        }
+        // Otherwise try to match values manually
         if (cellValue instanceof Number) {
             for (Map.Entry<Object, DBDLabelValuePair> pair : rowData.entrySet()) {
                 if (pair.getKey() instanceof Number && CommonUtils.compareNumbers((Number) pair.getKey(), (Number) cellValue) == 0) {
@@ -475,7 +534,14 @@ class GenericFilterValueEdit {
                 }
             }
         }
-        return rowData.get(cellValue);
+        if (cellValue instanceof String) {
+            for (Map.Entry<Object, DBDLabelValuePair> pair : rowData.entrySet()) {
+                if (!DBUtils.isNullValue(pair.getKey()) && CommonUtils.toString(pair.getKey()).equals(cellValue)) {
+                    return pair.getValue();
+                }
+            }
+        }
+        return null;
     }
 
     @Nullable
@@ -561,10 +627,12 @@ class GenericFilterValueEdit {
             if (executionContext == null) {
                 return Status.OK_STATUS;
             }
+            UIUtils.syncExec(() -> tableViewer.getTable().setEnabled(false));
             try {
                 monitor.subTask("Read enumeration");
                 final List<DBDLabelValuePair> valueEnumeration = readEnumeration(monitor);
                 if (valueEnumeration == null) {
+                    populateValues(Collections.emptyList());
                     return Status.OK_STATUS;
                 } else {
                     populateValues(valueEnumeration);
@@ -592,6 +660,7 @@ class GenericFilterValueEdit {
         void populateValues(@NotNull final Collection<DBDLabelValuePair> values) {
             UIUtils.asyncExec(() -> {
                 loadMultiValueList(values, mergeResultsWithData());
+                tableViewer.getTable().setEnabled(true);
             });
         }
     }

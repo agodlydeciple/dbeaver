@@ -238,17 +238,23 @@ public class ActionUtils
         IBindingService bindingService = serviceLocator.getService(IBindingService.class);
         if (bindingService != null) {
             TriggerSequence sequence = null;
-            for (Binding b : bindingService.getBindings()) {
-                ParameterizedCommand parameterizedCommand = b.getParameterizedCommand();
-                if (parameterizedCommand != null && commandId.equals(parameterizedCommand.getId())) {
-                    if (paramName != null) {
-                        Object cmdParamValue = parameterizedCommand.getParameterMap().get(paramName);
-                        if (!CommonUtils.equalObjects(cmdParamValue, paramValue)) {
-                            continue;
+            Binding[] bindings = bindingService.getBindings();
+            if (bindings != null) {
+                for (Binding b : bindings) {
+                    ParameterizedCommand parameterizedCommand = b.getParameterizedCommand();
+                    if (parameterizedCommand != null && commandId.equals(parameterizedCommand.getId())) {
+                        if (paramName != null) {
+                            Object cmdParamValue = parameterizedCommand.getParameterMap().get(paramName);
+                            if (!CommonUtils.equalObjects(cmdParamValue, paramValue)) {
+                                continue;
+                            }
+                        }
+                        sequence = b.getTriggerSequence();
+                        if (b.getType() == Binding.USER) {
+                            // Prefer user-defined binding over default (system)
+                            break;
                         }
                     }
-                    sequence = b.getTriggerSequence();
-                    break;
                 }
             }
             if (sequence == null) {
@@ -268,6 +274,18 @@ public class ActionUtils
             return shortcut;
         }
         return commandName + " (" + shortcut + ")";
+    }
+
+    @Nullable
+    public static Command findCommand(@NotNull String commandId) {
+        final ICommandService commandService = PlatformUI.getWorkbench().getService(ICommandService.class);
+        if (commandService != null) {
+            final Command command = commandService.getCommand(commandId);
+            if (command != null && command.isDefined()) {
+                return command;
+            }
+        }
+        return null;
     }
 
     public static void runCommand(String commandId, IServiceLocator serviceLocator)

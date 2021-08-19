@@ -94,6 +94,7 @@ public class CoreMessages extends NLS {
 	public static String dialog_about_title;
 
 	public static String dialog_connection_button_test;
+	public static String dialog_connection_events_settings_group;
 	public static String dialog_connection_events_checkbox_show_process;
 	public static String dialog_connection_events_checkbox_terminate_at_disconnect;
 	public static String dialog_connection_events_checkbox_wait_finish;
@@ -111,6 +112,8 @@ public class CoreMessages extends NLS {
     public static String dialog_connection_wizard_final_checkbox_auto_commit;
 	public static String dialog_connection_wizard_final_checkbox_show_only_entities;
 	public static String dialog_connection_wizard_final_checkbox_show_only_entities_tip;
+	public static String dialog_connection_wizard_final_checkbox_merge_entities;
+	public static String dialog_connection_wizard_final_checkbox_merge_entities_tip;
 	public static String dialog_connection_wizard_final_checkbox_show_system_objects;
 	public static String dialog_connection_wizard_final_checkbox_show_system_objects_tip;
 	public static String dialog_connection_wizard_final_checkbox_show_util_objects;

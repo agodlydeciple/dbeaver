@@ -52,9 +52,10 @@ public class SQLServerDialect extends JDBCSQLDialect implements TPRuleProvider {
     };
 
     private static String[] SQLSERVER_EXTRA_KEYWORDS = new String[]{
-        "TOP",
-        "SYNONYM",
-        "PERSISTED"
+            "LOGIN",
+            "TOP",
+            "SYNONYM",
+            "PERSISTED"
     };
 
     private static final String[][] SQLSERVER_QUOTE_STRINGS = {
@@ -232,10 +233,16 @@ public class SQLServerDialect extends JDBCSQLDialect implements TPRuleProvider {
             // The numeric precision has a range from 1 to 38. The default precision is 38.
             // The scale has a range from 0 to p (precision). The scale can be specified only if the precision is specified. By default, the scale is zero
             Integer precision = column.getPrecision();
+            if (precision == null) {
+                precision = 18; // Standard precision value for numeric/decimal types
+            }
             if (precision < 1 || precision > SQLServerConstants.MAX_NUMERIC_PRECISION) {
                 precision = SQLServerConstants.MAX_NUMERIC_PRECISION;
             }
             Integer scale = column.getScale();
+            if (scale == null) {
+                scale = 0; // Standard scale value for numeric/decimal types
+            }
             if (scale > precision) {
                 scale = precision;
             }
@@ -326,5 +333,10 @@ public class SQLServerDialect extends JDBCSQLDialect implements TPRuleProvider {
             rules.add(new SQLMultiWordRule(new String[]{"BEGIN", "TRANSACTION"}, keywordToken));
             rules.add(new SQLMultiWordRule(new String[]{"BEGIN", "TRAN"}, keywordToken));
         }
+    }
+
+    @Override
+    public boolean supportsInsertAllDefaultValuesStatement() {
+        return isSqlServer; // Sybase throws a syntax error on "DEFAULT" keyword
     }
 }
