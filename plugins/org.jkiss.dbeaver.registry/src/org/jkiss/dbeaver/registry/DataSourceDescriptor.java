@@ -66,7 +66,6 @@ import org.jkiss.dbeaver.runtime.properties.PropertyCollector;
 import org.jkiss.dbeaver.utils.SystemVariablesResolver;
 import org.jkiss.utils.CommonUtils;
 
-import java.io.IOException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Paths;
@@ -951,11 +950,21 @@ public class DataSourceDescriptor
             return true;
         } catch (Exception e) {
             log.debug("Connection failed (" + getId() + ")", e);
+            if (dataSource != null) {
+                try {
+                    dataSource.shutdown(monitor);
+                } catch (Exception e1) {
+                    log.debug("Error closing failed connection", e1);
+                } finally {
+                    dataSource = null;
+                }
+            }
+
             if (tunnelHandler != null) {
                 try {
                     tunnelHandler.closeTunnel(monitor);
-                } catch (IOException e1) {
-                    log.error("Error closing tunnel", e);
+                } catch (Exception e1) {
+                    log.error("Error closing tunnel", e1);
                 } finally {
                     tunnelHandler = null;
                 }

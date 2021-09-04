@@ -26,9 +26,11 @@ import org.jkiss.dbeaver.model.exec.*;
 import org.jkiss.dbeaver.model.impl.jdbc.struct.JDBCTable;
 import org.jkiss.dbeaver.model.impl.sql.BaseInsertMethod;
 import org.jkiss.dbeaver.model.sql.SQLConstants;
+import org.jkiss.dbeaver.model.sql.SQLUtils;
 import org.jkiss.dbeaver.model.struct.DBSAttributeBase;
 import org.jkiss.dbeaver.model.struct.DBSDataManipulator;
 import org.jkiss.dbeaver.model.struct.rdb.DBSTable;
+import org.jkiss.utils.CommonUtils;
 
 import java.util.Map;
 
@@ -69,8 +71,14 @@ public class ExecuteInsertBatchImpl extends ExecuteBatchImpl {
     @Override
     protected DBCStatement prepareStatement(@NotNull DBCSession session, DBDValueHandler[] handlers, Object[] attributeValues, Map<String, Object> options) throws DBCException {
         StringBuilder queryForStatement = prepareQueryForStatement(session, handlers, attributeValues, attributes, table,false, options);
-        // Execute
-        DBCStatement dbStat = session.prepareStatement(DBCStatementType.QUERY, queryForStatement.toString(), false, false, keysReceiver != null);
+        // Execute. USe plain statement if binding was disabled
+        boolean skipBindValues = CommonUtils.toBoolean(options.get(DBSDataManipulator.OPTION_SKIP_BIND_VALUES));
+        DBCStatement dbStat = session.prepareStatement(
+            skipBindValues ? DBCStatementType.SCRIPT : DBCStatementType.QUERY,
+            queryForStatement.toString(),
+            false,
+            false,
+            keysReceiver != null);
         dbStat.setStatementSource(source);
         return dbStat;
     }
@@ -154,6 +162,7 @@ public class ExecuteInsertBatchImpl extends ExecuteBatchImpl {
         StringBuilder valuesPart = new StringBuilder(64);
         valuesPart.append("(");
         hasKey = false;
+        boolean skipBindValues = CommonUtils.toBoolean(options.get(DBSDataManipulator.OPTION_SKIP_BIND_VALUES));
         for (int i = 0; i < attributes.length; i++) {
             DBSAttributeBase attribute = attributes[i];
             if (DBUtils.isPseudoAttribute(attribute) || (!useMultiRowInsert && (!allNulls && DBUtils.isNullValue(attributeValues[i])))) {
@@ -163,6 +172,7 @@ public class ExecuteInsertBatchImpl extends ExecuteBatchImpl {
             hasKey = true;
 
             DBDValueHandler valueHandler = handlers[i];
+            
             if (valueHandler instanceof DBDValueBinder) {
                 valuesPart.append(((DBDValueBinder) valueHandler).makeQueryBind(attribute, attributeValues[i]));
             } else {
@@ -179,6 +189,22 @@ public class ExecuteInsertBatchImpl extends ExecuteBatchImpl {
             }
         } else {
             query.append(valuesPart);
+        }
+
+        if (skipBindValues) {
+            // Here we replace all binding marks (?) with real values
+            int curPos = 0;
+            for (int i = 0; i < attributeValues.length; i++) {
+                String sqlValue = SQLUtils.convertValueToSQL(
+                    session.getDataSource(),
+                    attributes[i % attributes.length],
+                    handlers[i % handlers.length],
+                    attributeValues[i],
+                    DBDDisplayFormat.NATIVE);
+
+                int qmPos = query.indexOf("?", curPos);
+                query.replace(qmPos, qmPos + 1, sqlValue);
+            }
         }
 
         String trailingClause = method.getTrailingClause(table, session.getProgressMonitor(), attributes);

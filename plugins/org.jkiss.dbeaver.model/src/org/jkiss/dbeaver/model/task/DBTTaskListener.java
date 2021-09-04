@@ -23,4 +23,6 @@ public interface DBTTaskListener {
 
     void handleTaskEvent(DBTTaskEvent event);
 
+    void handleTaskFolderEvent(DBTTaskFolderEvent event);
+
 }

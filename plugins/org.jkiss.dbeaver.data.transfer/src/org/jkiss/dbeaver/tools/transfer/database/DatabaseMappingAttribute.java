@@ -137,18 +137,18 @@ public class DatabaseMappingAttribute implements DatabaseMappingObject {
         this.mappingType = mappingType;
         switch (mappingType) {
             case create:
-                targetName = getSourceLabelOrName(getSource());
+                targetName = getSourceLabelOrName(getSource(), true);
                 break;
         }
     }
 
-    public void updateMappingType(DBRProgressMonitor monitor) throws DBException {
+    public void updateMappingType(DBRProgressMonitor monitor, boolean forceRefresh) throws DBException {
         switch (parent.getMappingType()) {
             case existing: {
                 mappingType = DatabaseMappingType.unspecified;
                 if (parent.getTarget() instanceof DBSEntity) {
-                    if (CommonUtils.isEmpty(targetName)) {
-                        targetName = getSourceLabelOrName(source);
+                    if (forceRefresh || CommonUtils.isEmpty(targetName)) {
+                        targetName = getSourceLabelOrName(source, true);
                     }
                     DBSEntity targetEntity = (DBSEntity) parent.getTarget();
                     List<? extends DBSEntityAttribute> targetAttributes = targetEntity.getAttributes(monitor);
@@ -199,8 +199,8 @@ public class DatabaseMappingAttribute implements DatabaseMappingObject {
             }
             case create:
                 mappingType = DatabaseMappingType.create;
-                if (CommonUtils.isEmpty(targetName)) {
-                    targetName = getSourceLabelOrName(source);
+                if (forceRefresh || CommonUtils.isEmpty(targetName)) {
+                    targetName = getSourceLabelOrName(source, true);
                 }
                 break;
             case skip:
@@ -214,7 +214,7 @@ public class DatabaseMappingAttribute implements DatabaseMappingObject {
         if (mappingType == DatabaseMappingType.create && !CommonUtils.isEmpty(targetName)) {
             // Convert target name case (#1516)
             DBSObjectContainer container = parent.getSettings().getContainer();
-            if (container != null) {
+            if (container != null && !DBUtils.isQuotedIdentifier(container.getDataSource(), targetName)) {
                 targetName = DBObjectNameCaseTransformer.transformName(container.getDataSource(), targetName);
             }
         } else if (mappingType == DatabaseMappingType.unspecified && source != null && targetName != null) {
@@ -228,6 +228,10 @@ public class DatabaseMappingAttribute implements DatabaseMappingObject {
     }
 
     String getSourceLabelOrName(DBSAttributeBase source) {
+        return getSourceLabelOrName(source, false);
+    }
+
+    String getSourceLabelOrName(DBSAttributeBase source, boolean quoteIdentifier) {
         String name = null;
         if (source instanceof DBDAttributeBinding) {
             name = ((DBDAttributeBinding) source).getLabel();
@@ -237,11 +241,15 @@ public class DatabaseMappingAttribute implements DatabaseMappingObject {
         }
         DBSObjectContainer container = parent.getSettings().getContainer();
 
+        if (container != null && !CommonUtils.isEmpty(name) && quoteIdentifier) {
+            name = DBUtils.getQuotedIdentifier(container.getDataSource(), name);
+        }
+
         if (container != null && !DBUtils.isQuotedIdentifier(container.getDataSource(), name)) {
             name = DBObjectNameCaseTransformer.transformName(container.getDataSource(), name);
         }
 
-        return container == null ? name : DBUtils.getQuotedIdentifier(container.getDataSource(), name);
+        return name;
     }
 
     @Nullable

@@ -72,8 +72,14 @@ public class SQLWordPartDetector extends SQLIdentifierDetector
                 if (inQuote || inString) {
                     // Opening quote
                     if (isQuote(c)) {
-                        startOffset--;
-                        break;
+                        if (startOffset > 1 && syntaxManager.getStructSeparator() == document.getChar(startOffset - 1)) {
+                            // Previous char is a separator. Keep going. This is a part of a long name #13004
+                            startOffset--;
+                            inQuote = false;
+                        } else {
+                            startOffset--;
+                            break;
+                        }
                     } else if (isStringQuote(c)) {
                         break;
                     }

@@ -36,10 +36,10 @@ import java.util.Map;
  */
 public class PostgreCommandGrantPrivilege extends DBECommandAbstract<PostgrePrivilegeOwner> {
 
-    private boolean grant;
-    private PostgrePrivilege permission;
-    private PostgrePrivilegeType[] privilege;
-    private DBSObject privilegeOwner;
+    private final boolean grant;
+    private final PostgrePrivilege permission;
+    private final PostgrePrivilegeType[] privilege;
+    private final DBSObject privilegeOwner;
 
     public PostgreCommandGrantPrivilege(PostgrePrivilegeOwner user, boolean grant, DBSObject privilegeOwner, PostgrePrivilege permission, PostgrePrivilegeType[] privilege)
     {
@@ -85,7 +85,11 @@ public class PostgreCommandGrantPrivilege extends DBECommandAbstract<PostgrePriv
             }
         } else {
             PostgreObjectPrivilege permission = (PostgreObjectPrivilege) this.permission;
-            roleName = permission.getGrantee() == null ? null : DBUtils.getQuotedIdentifier(object.getDataSource(), permission.getGrantee());
+            if (permission.getGrantee() != null) {
+                roleName = permission.getGrantee();
+            } else {
+                roleName = "";
+            }
             objectName = PostgreUtils.getObjectUniqueName(object);
         }
         if (roleName == null) {

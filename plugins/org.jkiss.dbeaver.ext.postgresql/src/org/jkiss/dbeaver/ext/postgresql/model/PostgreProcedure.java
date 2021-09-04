@@ -131,7 +131,7 @@ public class PostgreProcedure extends AbstractProcedure<PostgreDataSource, Postg
     }
 
     private void loadInfo(DBRProgressMonitor monitor, ResultSet dbResult) {
-        this.oid = JDBCUtils.safeGetLong(dbResult, "oid");
+        this.oid = JDBCUtils.safeGetLong(dbResult, "poid");
         setName(JDBCUtils.safeGetString(dbResult, "proname"));
         this.ownerId = JDBCUtils.safeGetLong(dbResult, "proowner");
         this.languageId = JDBCUtils.safeGetLong(dbResult, "prolang");
@@ -455,6 +455,9 @@ public class PostgreProcedure extends AbstractProcedure<PostgreDataSource, Postg
         }
         if (language != null) {
             decl.append("\tLANGUAGE ").append(language).append(lineSeparator);
+        }
+        if (isSecurityDefiner()) {
+            decl.append("\tSECURITY DEFINER").append(lineSeparator);
         }
         if (isWindow()) {
             decl.append("\tWINDOW").append(lineSeparator);

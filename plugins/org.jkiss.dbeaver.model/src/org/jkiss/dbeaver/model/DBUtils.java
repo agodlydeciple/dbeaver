@@ -667,7 +667,8 @@ public final class DBUtils {
     public static DBDAttributeBinding[] makeLeafAttributeBindings(@NotNull DBCSession session, @NotNull DBSDataContainer dataContainer, @NotNull DBCResultSet resultSet) throws DBCException {
         List<DBDAttributeBinding> metaColumns = new ArrayList<>();
         List<DBCAttributeMetaData> attributes = resultSet.getMeta().getAttributes();
-        if (attributes.size() == 1 && attributes.get(0).getDataKind() == DBPDataKind.DOCUMENT) {
+        boolean isDocumentAttribute = attributes.size() == 1 && attributes.get(0).getDataKind() == DBPDataKind.DOCUMENT;
+        if (isDocumentAttribute) {
             DBCAttributeMetaData attributeMeta = attributes.get(0);
             DBDAttributeBindingMeta docBinding = DBUtils.getAttributeBinding(dataContainer, session, attributeMeta);
             try {
@@ -1062,7 +1063,7 @@ public final class DBUtils {
 
     public static boolean referrerMatches(@NotNull DBRProgressMonitor monitor, @NotNull DBSEntityReferrer referrer, @NotNull Collection<? extends DBSEntityAttribute> attributes) throws DBException {
         final List<? extends DBSEntityAttributeRef> refs = referrer.getAttributeReferences(monitor);
-        if (refs != null && !refs.isEmpty()) {
+        if (refs != null && !refs.isEmpty() && attributes.size() == refs.size()) {
             Iterator<? extends DBSEntityAttribute> attrIterator = attributes.iterator();
             for (DBSEntityAttributeRef ref : refs) {
                 if (!attrIterator.hasNext()) {

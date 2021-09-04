@@ -20,10 +20,10 @@ import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
-import org.jkiss.dbeaver.ext.postgresql.PostgreConstants;
 import org.jkiss.dbeaver.ext.postgresql.model.*;
 import org.jkiss.dbeaver.ext.postgresql.model.impls.PostgreServerExtensionBase;
 import org.jkiss.dbeaver.model.DBPErrorAssistant;
+import org.jkiss.dbeaver.model.DBPKeywordType;
 import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.exec.DBCExecutionContext;
 import org.jkiss.dbeaver.model.exec.jdbc.JDBCPreparedStatement;
@@ -33,12 +33,14 @@ import org.jkiss.dbeaver.model.exec.jdbc.JDBCStatement;
 import org.jkiss.dbeaver.model.impl.jdbc.JDBCUtils;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.sql.SQLState;
+import org.jkiss.dbeaver.model.struct.DBSTypedObject;
 import org.jkiss.utils.CommonUtils;
 import org.osgi.framework.Version;
 
 import java.sql.SQLException;
+import java.sql.Types;
+import java.util.Arrays;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -56,6 +58,37 @@ public class PostgreServerRedshift extends PostgreServerExtensionBase implements
     public PostgreServerRedshift(PostgreDataSource dataSource) {
         super(dataSource);
     }
+    
+    private static final String[] REDSHIFT_OTHER_TYPES_FUNCTION = {
+        "SYSDATE"
+    };
+    
+    public static String[] REDSHIFT_EXTRA_KEYWORDS = new String[]{
+        "AUTO",
+        "BACKUP",
+        "AZ64",
+        "CASE_SENSITIVE",
+        "CASE_INSENSITIVE",
+        "COMPOUND",
+        "INTERLEAVED",
+        "COPY",
+        "DATASHARE",
+        "DISTSTYLE",
+        "DISTKEY",
+        "EVEN",
+        "MODEL",
+        "OWNER",
+        "SORTKEY",
+        "TEMP",
+        "UNLOAD",
+        "VACUUM",
+        "YES"
+    };
+   
+    public static String[] REDSHIFT_FUNCTIONS_CONDITIONAL = new String[]{
+        "NVL",
+        "NVL2"
+    };
 
     private boolean isRedshiftVersionAtLeast(int major, int minor, int micro) {
         if (redshiftVersion == null) {
@@ -264,14 +297,6 @@ public class PostgreServerRedshift extends PostgreServerExtensionBase implements
     }
 
     @Override
-    public Map<String, String> getDataTypeAliases() {
-        Map<String, String> aliasMap = new LinkedHashMap<>(super.getDataTypeAliases());
-        aliasMap.put("character", PostgreConstants.TYPE_BPCHAR);
-        aliasMap.put("character varying", PostgreConstants.TYPE_VARCHAR);
-        return aliasMap;
-    }
-
-    @Override
     public boolean supportsEntityMetadataInResults() {
         return true;
     }
@@ -343,10 +368,25 @@ public class PostgreServerRedshift extends PostgreServerExtensionBase implements
             esSchemaMap.clear();
         }
     }
+    
+    @Override
+    public void configureDialect(PostgreDialect dialect) {
+        dialect.addExtraKeywords(REDSHIFT_EXTRA_KEYWORDS);
+        dialect.addKeywords(Arrays.asList(REDSHIFT_OTHER_TYPES_FUNCTION), DBPKeywordType.OTHER);
+        dialect.addExtraFunctions(REDSHIFT_FUNCTIONS_CONDITIONAL);
+    }
 
     @Override
     public boolean supportsBackslashStringEscape() {
         return true;
+    }
+
+    @Override
+    public int getParameterBindType(DBSTypedObject type, Object value) {
+        if (value instanceof String) {
+            return Types.VARCHAR;
+        }
+        return super.getParameterBindType(type, value);
     }
 
     @Override

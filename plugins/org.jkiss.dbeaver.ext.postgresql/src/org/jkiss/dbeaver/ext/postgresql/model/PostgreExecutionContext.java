@@ -110,7 +110,7 @@ public class PostgreExecutionContext extends JDBCExecutionContext implements DBC
                 catalogChanged = true;
             }
             if (schema != null) {
-                if (catalogChanged) {
+                if (catalogChanged && !isolatedContext) {
                     // Catalog has been changed. Get the new one and change schema there
                     PostgreDatabase newInstance = getDataSource().getDefaultInstance();
                     PostgreExecutionContext newContext = (PostgreExecutionContext) newInstance.getDefaultContext(false);
@@ -158,6 +158,8 @@ public class PostgreExecutionContext extends JDBCExecutionContext implements DBC
                     if (rs.nextRow()) {
                         String activeSchemaName = JDBCUtils.safeGetString(rs, 1);
                         if (!CommonUtils.isEmpty(activeSchemaName)) {
+                            // Pre-cache schemas, we need them anyway
+                            getDefaultCatalog().getSchemas(monitor);
                             activeSchema = getDefaultCatalog().getSchema(monitor, activeSchemaName);
                         }
                         activeUser = JDBCUtils.safeGetString(rs, 2);
